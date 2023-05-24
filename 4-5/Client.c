@@ -4,16 +4,25 @@ void DieWithError(char *errorMessage);  /* Error handling function */
 
 int main(int argc, char *argv[])
 {
+    int sock;                        /* Socket descriptor */
+    struct sockaddr_in echoServAddr; /* Echo server address */
+    unsigned short echoServPort;     /* Echo server port */
+    char *servIP;                    /* Server IP address (dotted quad) */
+    Book book_to_send;                /* String to send to echo server */
+    unsigned int sizeOfBook = sizeof(Book);      /* Length of string to echo */
+    char echoBuffer[sizeOfBook];     /* Buffer for echo string */
+    int bytesRcvd, totalBytesRcvd;   /* Bytes read in single recv() */
     // Указатель на файл.
     FILE *fpc;
     // Название файла ввода.
     char* filename;
-    // Если название не указано в аргументах командной строки, осуществляется ввод из консоли.
-    if (argc < 2) {
-        printf("Enter the filename: ");
-        scanf("%s", filename);
-    } else {
+    // Если название не указано в аргументах командной строки, осуществляется ввод из консоли
+    
+    if (argc == 4) {
+        echoServPort = atoi(argv[3]); /* Use given port, if any */
         filename = argv[1];
+    } else {
+        echoServPort = 7;  /* 7 is the well-known port for the echo service */
     }
 
     // Открытие файла ввода.
@@ -50,26 +59,7 @@ int main(int argc, char *argv[])
     fclose(fp);
     printf("Input done.\n");
 
-    // Sending info to server.
-    int sock;                        /* Socket descriptor */
-    struct sockaddr_in echoServAddr; /* Echo server address */
-    unsigned short echoServPort;     /* Echo server port */
-    char *servIP;                    /* Server IP address (dotted quad) */
-    char *echoString;                /* String to send to echo server */
-    char echoBuffer[sizeof(Book)];     /* Buffer for echo string */
-    unsigned int echoStringLen;      /* Length of string to echo */
-    int bytesRcvd, totalBytesRcvd;   /* Bytes read in single recv()
-                                        and total bytes read */
-
-    if ((argc < 3) || (argc > 4))    /* Test for correct number of arguments */
-    {
-       fprintf(stderr, "Usage: %s <Server IP> <Echo Word> [<Echo Port>]\n",
-               argv[0]);
-       exit(1);
-    }
-
     servIP = argv[1];             /* First arg: server IP address (dotted quad) */
-    echoString = argv[2];         /* Second arg: string to echo */
 
     if (argc == 4)
         echoServPort = atoi(argv[3]); /* Use given port, if any */
@@ -90,30 +80,57 @@ int main(int argc, char *argv[])
     if (connect(sock, (struct sockaddr *) &echoServAddr, sizeof(echoServAddr)) < 0)
         DieWithError("connect() failed");
 
-    echoStringLen = strlen(echoString);          /* Determine input length */
+    sizeOfBook = sizeof(Book);          /* Determine input length */
 
-    for(int i = 0; i < 10; ++i) {
-        /* Send the string to the server */
-        if (send(sock, echoString, echoStringLen, 0) != echoStringLen)
-            DieWithError("send() sent a different number of bytes than expected");
+    iterator = 0;
 
-        /* Receive the same string back from the server */
-        totalBytesRcvd = 0;
-        printf("%d) Received: ", i);            // Setup to print the echoed string
-        while (totalBytesRcvd < echoStringLen) {
-            /* Receive up to the buffer size (minus 1 to leave space for
-            a null terminator) bytes from the sender */
-            if ((bytesRcvd = recv(sock, echoBuffer, sizeof(Book) - 1, 0)) <= 0)
-                DieWithError("recv() failed or connection closed prematurely");
-            totalBytesRcvd += bytesRcvd;   /* Keep tally of total bytes */
-            echoBuffer[bytesRcvd] = '\0';  /* Terminate the string! */
-            printf("%s", echoBuffer);      /* Print the echo buffer */
+    pid_t pid1 = fork();
+    if (pid1 == -1) {
+        printf("Ошибка при создании дочернего процесса\n");
+        exit(-1);
+    } else if (pid1 == 0) {
+        pid_t pid2 = fork();
+    
+        if (pid1 == -1) {
+            printf("Ошибка при создании дочернего процесса\n");
+            exit(-1);
+        } else if (pid2 == 0) {
+            iterator = 2;
+            if (books_amount > 1) {
+                do {
+                    if (send(sock, &books.books[iterator], sizeOfBook, 0) != sizeOfBook)
+                    DieWithError("send() sent a different number of bytes than expected");
+                    printf("\n");    /* Print a final linefeed */
+                    iterator += 3;
+                } while (iterator < books_amount);
+        
+                close(sock);
+                exit(0);
+            }
+        } else {
+            iterator = 1;
+            if (books_amount > 0) {
+                do {
+                    if (send(sock, &books.books[iterator], sizeOfBook, 0) != sizeOfBook)
+                    DieWithError("send() sent a different number of bytes than expected");
+                    printf("\n");    /* Print a final linefeed */
+                    iterator += 3;
+                } while (iterator < books_amount);
+        
+                close(sock);
+                exit(0);
+            }
         }
-
-        printf("\n");    /* Print a final linefeed */
-        sleep(2);
+    } else {
+        iterator = 0;
+        do {
+            if (send(sock, &books.books[iterator], sizeOfBook, 0) != sizeOfBook)
+                DieWithError("send() sent a different number of bytes than expected");
+            printf("\n");    /* Print a final linefeed */
+            iterator += 3;
+        } while (iterator < books_amount);
+        
+        close(sock);
+        exit(0);
     }
-
-    close(sock);
-    exit(0);
 }

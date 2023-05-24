@@ -1,8 +1,8 @@
 #include "header.h"
 
-#define MAXPENDING 5    /* Maximum outstanding connection requests */
+#define MAXPENDING 3    /* Maximum outstanding connection requests */
 
-void bubbleSort(catalog *lib) {
+void bubbleSort(Catalog *lib) {
     Book *arr = lib->books;
     int n = lib->num_books;
     int i, j;
@@ -30,7 +30,9 @@ int main(int argc, char *argv[])
     struct sockaddr_in echoClntAddr; /* Client address */
     unsigned short echoServPort;     /* Server port */
     unsigned int clntLen;            /* Length of client address data structure */
-    catalog library;
+    Catalog library;
+    int amount_of_books = atoi(argv[2]);
+    library.books = (Book*) malloc(amount_of_books);
 
     if (argc != 2)     /* Test for correct number of arguments */
     {
@@ -60,7 +62,7 @@ int main(int argc, char *argv[])
     if (listen(servSock, MAXPENDING) < 0)
         DieWithError("listen() failed");
 
-    for (;;) /* Run forever */
+    while (amount_of_books != library.num_books)/* Run forever */
     {
         /* Set the size of the in-out parameter */
         clntLen = sizeof(echoClntAddr);
@@ -71,11 +73,28 @@ int main(int argc, char *argv[])
 
         /* clntSock is connected to a client! */
 
-        //bubbleSort();
-
         printf("Handling client %s\n", inet_ntoa(echoClntAddr.sin_addr));
 
-        HandleTCPClient(clntSock);
+        Book bookBuffer;                   /* Buffer for echo string */
+        int recvMsgSize;                    /* Size of received message */
+
+        /* Receive message from client */
+        if ((recvMsgSize = recv(clntSock, &bookBuffer, sizeof(Book), 0)) < 0)
+        DieWithError("recv() failed");
+
+        /* Send received string and receive again until end of transmission */
+        while (recvMsgSize > 0)      /* zero indicates end of transmission */
+        {
+            
+
+            /* See if there is more data to receive */
+            if ((recvMsgSize = recv(clntSock, &bookBuffer, sizeof(Book), 0)) < 0)
+                DieWithError("recv() failed");
+        }
+
+        library.books[library.num_books] = bookBuffer;
+        ++library.num_books;
+        bubbleSort(&library);
+        close(clntSock);    /* Close client socket */
     }
-    /* NOT REACHED */
 }
